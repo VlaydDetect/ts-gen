@@ -1,7 +1,6 @@
 #![macro_use]
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Display, Formatter};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -72,7 +71,6 @@ impl DerivedTS {
             self.bound.as_deref(),
             &self.dependencies,
         );
-        // let assoc_type = generate_assoc_type(&rust_ty, &crate_rename, &generics);
         let name = self.generate_name_fn(&generics);
         let inline = self.generate_inline_fn();
         let decl = self.generate_decl_fn(&rust_ty, &generics);
@@ -81,7 +79,6 @@ impl DerivedTS {
 
         quote! {
             #impl_start {
-                // #assoc_type
 
                 fn ident() -> String {
                     #ident.to_owned()
@@ -350,19 +347,6 @@ impl DerivedTS {
             }
         }
     }
-}
-
-fn generate_assoc_type(rust_ty: &Ident, crate_rename: &Path, generics: &Generics) -> TokenStream {
-    use GenericParam as G;
-
-    let generics_params = generics.params.iter().map(|x| match x {
-        // G::Type(_) => quote! { #crate_rename::Dummy },
-        G::Type(ty) => quote! { #ty },
-        G::Const(ConstParam { ident, .. }) => quote! { #ident },
-        G::Lifetime(LifetimeParam { lifetime, .. }) => quote! { #lifetime },
-    });
-
-    quote! { type WithoutGenerics = #rust_ty<#(#generics_params),*>; }
 }
 
 // generate start of the `impl TS for #ty` block, up to (excluding) the open brace

@@ -21,7 +21,8 @@ where
 {
     time: u64,
     value: T,
-    name: P,
+    #[ts(optional)]
+    name: Option<P>,
 }
 
 #[derive(Serialize, TS)]

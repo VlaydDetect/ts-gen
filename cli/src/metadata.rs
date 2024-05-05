@@ -20,7 +20,7 @@ struct Entry<'a> {
 impl<'a> TryFrom<&'a str> for Entry<'a> {
     type Error = Error;
 
-    fn try_from(value: &'a str) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let (rust_name, export_path) =
             value.split_once(',').ok_or_eyre("Invalid metadata entry")?;
 
@@ -38,7 +38,7 @@ pub struct Metadata<'a> {
 impl<'a> TryFrom<&'a str> for Metadata<'a> {
     type Error = Error;
 
-    fn try_from(value: &'a str) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         Ok(Self {
             entries: value.lines().try_fold(
                 HashMap::<&str, HashSet<_>>::default(),

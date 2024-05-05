@@ -156,7 +156,6 @@ pub(crate) fn export_to<T: TS + ?Sized + 'static, P: AsRef<Path>>(path: P) -> Re
 pub(crate) fn export_to_string<T: TS + ?Sized + 'static>() -> Result<String> {
     let mut buffer = String::with_capacity(1024);
     buffer.push_str(NOTE);
-    // generate_imports::<T::WithoutGenerics>(&mut buffer, default_out_dir())?; // TODO
     generate_imports::<T>(&mut buffer, default_out_dir())?;
     generate_decl::<T>(&mut buffer);
     Ok(buffer)

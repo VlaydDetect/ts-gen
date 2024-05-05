@@ -444,7 +444,7 @@ pub trait TS {
     }
 
     /// Manually generate bindings for this type, returning a [`String`].
-    /// This function does not format the output, even if the `format` feature is enabled. TODO
+    /// This function does not format the output, even if the `format` feature is enabled.
     ///
     /// # Automatic Exporting
     /// Types annotated with `#[ts(export)]`, together with all of their dependencies, will be
@@ -587,7 +587,7 @@ macro_rules! impl_shadow {
 
 impl<T: TS> TS for Option<T> {
     fn name() -> String {
-        format!("{} | null", T::name()) // TODO: null will be replaced in interface field with `field`?: `type`
+        format!("{} | null", T::name())
     }
     fn decl() -> String {
         panic!("{} cannot be declared", Self::name())
@@ -598,7 +598,7 @@ impl<T: TS> TS for Option<T> {
     }
 
     fn inline() -> String {
-        format!("{} | null", T::inline()) // TODO: null will be replaced in interface field with `field`?: `type`
+        format!("{} | null", T::inline())
     }
 
     fn inline_flattened() -> String {
