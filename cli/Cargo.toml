@@ -1,7 +1,11 @@
 [package]
 name = "cargo-ts-gen"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
+authors = ["Vlayd Detect"]
+description = "A CLI Tool for automatically exporting Rust types to Typescript using ts-gen crate"
+keywords = ["ts-gen", "cli"]
+license = "MIT"
 
 [[bin]]
 name = "ts-gen"
