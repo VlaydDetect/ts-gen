@@ -2,13 +2,13 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::metadata::FILE_NAME;
+use crate::{metadata::FILE_NAME, path::export_dir};
 
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Defines where your TS bindings will be saved by setting TS_GEN_EXPORT_DIR
     #[arg(long, short)]
-    pub output_directory: PathBuf,
+    pub output_directory: Option<PathBuf>,
 
     /// Disables warnings caused by using serde attributes that ts-gen cannot process
     #[arg(long)]
@@ -37,6 +37,6 @@ pub struct Args {
 // from forgetting to do cleanup if some code branch early returns from main
 impl Drop for Args {
     fn drop(&mut self) {
-        _ = std::fs::remove_file(self.output_directory.join(FILE_NAME));
+        _ = std::fs::remove_file(export_dir(self).join(FILE_NAME));
     }
 }

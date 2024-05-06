@@ -31,7 +31,10 @@ pub fn invoke(args: &Args) -> Result<()> {
         } else {
             Stdio::piped()
         })
-        .env("TS_GEN_EXPORT_DIR", path::absolute(&args.output_directory)?);
+        .env(
+            "TS_GEN_EXPORT_DIR",
+            path::absolute(path::export_dir(&args))?,
+        );
 
     feature!(cargo_invocation, args, {
         no_warnings => "no-serde-warnings",

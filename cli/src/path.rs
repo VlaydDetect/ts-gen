@@ -1,5 +1,9 @@
-use std::path::{Component, Path, PathBuf};
+use std::{
+    borrow::Cow,
+    path::{Component, Path, PathBuf},
+};
 
+use crate::args::Args;
 use color_eyre::{eyre::OptionExt, Result};
 
 pub fn absolute<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
@@ -27,4 +31,18 @@ pub fn absolute<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
     } else {
         out.iter().collect()
     })
+}
+
+fn env_export_dir() -> Cow<'static, Path> {
+    match option_env!("TS_GEN_EXPORT_DIR") {
+        None => Cow::Borrowed(Path::new("./bindings")),
+        Some(dir) => Cow::Owned(PathBuf::from(dir)),
+    }
+}
+
+pub fn export_dir(args: &Args) -> PathBuf {
+    match &args.output_directory {
+        None => env_export_dir().to_path_buf(),
+        Some(dir) => dir.clone(),
+    }
 }

@@ -1,0 +1,2 @@
+[env]
+TS_GEN_EXPORT_DIR = { value = "../interface", relative = true }
