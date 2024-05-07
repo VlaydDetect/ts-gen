@@ -1,15 +1,19 @@
 #![macro_use]
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::FilterMap,
+};
 
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_quote, spanned::Spanned, ConstParam, GenericParam, Generics, Item, LifetimeParam, Path,
-    Result, Type, TypeArray, TypeParam, TypeParamBound, TypeParen, TypePath, TypeReference,
+    parse_quote, punctuated::Iter, spanned::Spanned, ConstParam, GenericParam, Generics, Item,
+    LifetimeParam, Path, Result, Type, TypeArray, TypeParam, TypeParen, TypePath, TypeReference,
     TypeSlice, TypeTuple, WhereClause, WherePredicate,
 };
 
+use crate::utils::get_traits_from_bounds;
 use crate::{deps::Dependencies, utils::format_generics};
 
 #[macro_use]
@@ -36,9 +40,6 @@ impl DerivedTS {
     fn into_impl(mut self, rust_ty: Ident, generics: Generics) -> TokenStream {
         let allow_export = cfg!(feature = "export") && self.export;
         let export = allow_export.then(|| self.generate_export_test(&rust_ty, &generics));
-        // let export = self
-        //     .export
-        //     .then(|| self.generate_export_test(&rust_ty, &generics));
 
         let output_path_fn = {
             let path = match self.export_to.as_deref() {
@@ -141,54 +142,43 @@ impl DerivedTS {
         let crate_rename = &self.crate_rename;
 
         let mut traits: HashMap<Ident, Vec<Ident>> = HashMap::new();
-        let ignored_traits = vec![
-            "Copy",
-            "Clone",
-            "Debug",
-            "Hash",
-            "Eq",
-            "PartialEq",
-            "Ord",
-            "PartialOrd",
-            "ToString",
-            "TS",
-        ];
+
+        let bounds = generics
+            .params
+            .iter()
+            .filter_map(|param| match param {
+                GenericParam::Type(TypeParam { ident, bounds, .. }) => Some((ident, bounds)),
+                _ => None,
+            })
+            .map(|b| {
+                let bounded_ty = b.0.clone();
+                let bounds = get_traits_from_bounds(b.1);
+                (bounded_ty, bounds)
+            });
+
+        traits.extend(bounds);
 
         if let Some(where_clause) = &generics.where_clause {
-            traits = where_clause
-                .predicates
-                .iter()
-                .filter_map(|p| match p {
-                    WherePredicate::Type(t) => Some(t),
-                    _ => None,
-                })
-                .map(|p| {
-                    let bounded_ty = p.bounded_ty.clone();
-                    let bounds = p
-                        .bounds
-                        .iter()
-                        .filter_map(|b| match b {
-                            TypeParamBound::Trait(t) => Some(t),
-                            _ => None,
-                        })
-                        .map(|b| {
-                            b.path
-                                .segments
-                                .iter()
-                                .map(|s| s.ident.clone())
-                                .filter(|i| !ignored_traits.iter().any(|it| i == it))
-                                .collect::<Vec<_>>()
-                        })
-                        .flatten()
-                        .collect::<Vec<_>>();
-
-                    (bounded_ty, bounds)
-                })
-                .filter_map(|a| match a.0 {
-                    Type::Path(p) => Some((p.path.segments.first().unwrap().ident.clone(), a.1)),
-                    _ => None,
-                })
-                .collect();
+            traits.extend(
+                where_clause
+                    .predicates
+                    .iter()
+                    .filter_map(|p| match p {
+                        WherePredicate::Type(t) => Some(t),
+                        _ => None,
+                    })
+                    .map(|p| {
+                        let bounded_ty = p.bounded_ty.clone();
+                        let bounds = get_traits_from_bounds(&p.bounds);
+                        (bounded_ty, bounds)
+                    })
+                    .filter_map(|a| match a.0 {
+                        Type::Path(p) => {
+                            Some((p.path.segments.first().unwrap().ident.clone(), a.1))
+                        }
+                        _ => None,
+                    }),
+            );
         }
 
         let generics = generics.type_params().map(|ty| ty.ident.clone());
@@ -206,7 +196,6 @@ impl DerivedTS {
                     }
                 }
                 impl #crate_rename::TS for #g {
-                    // type WithoutGenerics = #g;
                     fn name() -> String { stringify!(#g).to_owned() }
                     fn inline() -> String { panic!("{} cannot be inlined", #name) }
                     fn inline_flattened() -> String { panic!("{} cannot be flattened", #name) }
@@ -231,20 +220,8 @@ impl DerivedTS {
 
         let generic_types = self.generate_generic_types(generics);
 
-        use GenericParam as G;
-        // These are the generic parameters we'll be using.
-        let generic_params = generics.params.iter().filter_map(|p| match p {
-            G::Lifetime(_) => None,
-            G::Type(TypeParam { ident, .. }) => Some(quote!(#ident)),
-            // We keep const parameters as they are, since there's no sensible default value we can
-            // use instead. This might be something to change in the future.
-            G::Const(ConstParam { ident, .. }) => Some(quote!(#ident)),
-        });
+        let generic_params = filter_generic_params(generics);
 
-        // let generic_params = generics
-        //     .type_params()
-        //     // .map(|_| quote! { #crate_rename::Dummy });
-        //     .map(|ty| quote! { () });
         let ty = quote!(<#rust_ty<#(#generic_params),*> as #crate_rename::TS>);
 
         quote! {
@@ -322,31 +299,34 @@ impl DerivedTS {
     fn generate_decl_fn(&mut self, rust_ty: &Ident, generics: &Generics) -> TokenStream {
         let name = &self.ts_name;
         let crate_rename = &self.crate_rename;
-        let generic_types = self.generate_generic_types(generics);
         let ts_generics = format_generics(&mut self.dependencies, crate_rename, generics);
 
-        use GenericParam as G;
-        // These are the generic parameters we'll be using.
-        let generic_idents = generics.params.iter().filter_map(|p| match p {
-            G::Lifetime(_) => None,
-            G::Type(TypeParam { ident, .. }) => Some(quote!(#ident)),
-            // We keep const parameters as they are, since there's no sensible default value we can
-            // use instead. This might be something to change in the future.
-            G::Const(ConstParam { ident, .. }) => Some(quote!(#ident)),
-        });
+        let generic_idents = filter_generic_params(&generics);
 
         quote! {
             fn decl_concrete() -> String {
                 format!("type {} = {};", #name, <Self as #crate_rename::TS>::inline())
             }
             fn decl() -> String {
-                #generic_types
                 let inline = <#rust_ty<#(#generic_idents,)*> as #crate_rename::TS>::inline();
                 let generics = #ts_generics;
                 format!("type {}{generics} = {inline};", #name)
             }
         }
     }
+}
+
+/// These are the generic parameters we'll be using.
+fn filter_generic_params(
+    generics: &Generics,
+) -> FilterMap<Iter<GenericParam>, fn(&GenericParam) -> Option<TokenStream>> {
+    generics.params.iter().filter_map(|p| match p {
+        GenericParam::Lifetime(_) => None,
+        GenericParam::Type(TypeParam { ident, .. }) => Some(quote!(#ident)),
+        // We keep const parameters as they are, since there's no sensible default value we can
+        // use instead. This might be something to change in the future.
+        GenericParam::Const(ConstParam { ident, .. }) => Some(quote!(#ident)),
+    })
 }
 
 // generate start of the `impl TS for #ty` block, up to (excluding) the open brace
@@ -357,22 +337,20 @@ fn generate_impl_block_header(
     bounds: Option<&[WherePredicate]>,
     dependencies: &Dependencies,
 ) -> TokenStream {
-    use GenericParam as G;
-
     let params = generics.params.iter().map(|param| match param {
-        G::Type(TypeParam {
+        GenericParam::Type(TypeParam {
             ident,
             colon_token,
             bounds,
             ..
         }) => quote!(#ident #colon_token #bounds),
-        G::Lifetime(LifetimeParam {
+        GenericParam::Lifetime(LifetimeParam {
             lifetime,
             colon_token,
             bounds,
             ..
         }) => quote!(#lifetime #colon_token #bounds),
-        G::Const(ConstParam {
+        GenericParam::Const(ConstParam {
             const_token,
             ident,
             colon_token,
@@ -381,8 +359,9 @@ fn generate_impl_block_header(
         }) => quote!(#const_token #ident #colon_token #ty),
     });
     let type_args = generics.params.iter().map(|param| match param {
-        G::Type(TypeParam { ident, .. }) | G::Const(ConstParam { ident, .. }) => quote!(#ident),
-        G::Lifetime(LifetimeParam { lifetime, .. }) => quote!(#lifetime),
+        GenericParam::Type(TypeParam { ident, .. })
+        | GenericParam::Const(ConstParam { ident, .. }) => quote!(#ident),
+        GenericParam::Lifetime(LifetimeParam { lifetime, .. }) => quote!(#lifetime),
     });
 
     let where_bound = match bounds {
@@ -416,10 +395,6 @@ fn generate_where_clause(
     parse_quote! {
         where #(#existing,)* #(#used_types: #crate_rename::TS),*
     }
-
-    // parse_quote! {
-    //     where #(#used_types: #crate_rename::TS),*
-    // }
 }
 
 // Extracts all type parameters which are used within the given type.
@@ -481,9 +456,5 @@ fn entry(input: proc_macro::TokenStream) -> Result<TokenStream> {
         _ => syn_err!(input.span(); "unsupported item"),
     };
 
-    let res = ts.into_impl(ident, generics);
-
-    // println!("entry res: {res}");
-
-    Ok(res)
+    Ok(ts.into_impl(ident, generics))
 }

@@ -1,6 +1,7 @@
 #![allow(clippy::box_collection, clippy::enum_variant_names, dead_code)]
 #![allow(dead_code)]
 
+use serde::Serialize;
 use std::{
     collections::{BTreeMap, HashSet},
     fmt::Debug,
@@ -185,7 +186,7 @@ fn inline() {
 
 #[derive(TS)]
 #[ts(export, export_to = "generics/")]
-struct GenericWithBounds<T: ToString> {
+struct GenericWithBounds<T: ToString + Serialize + Default> {
     t: T,
 }
 

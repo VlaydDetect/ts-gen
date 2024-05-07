@@ -1,8 +1,9 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
+use syn::punctuated::Punctuated;
 use syn::{
     spanned::Spanned, Attribute, Error, Expr, ExprLit, GenericParam, Generics, Lit, Meta, Path,
-    Result,
+    Result, Token, TypeParamBound,
 };
 
 use super::attr::Attr;
@@ -257,4 +258,36 @@ pub fn format_generics(
 
     let comma_separated = quote!([#(#expanded_params),*].join(", "));
     quote!(format!("<{}>", #comma_separated))
+}
+
+pub fn get_traits_from_bounds(bounds: &Punctuated<TypeParamBound, Token![+]>) -> Vec<Ident> {
+    let ignored_traits = vec![
+        "Copy",
+        "Clone",
+        "Debug",
+        "Hash",
+        "Eq",
+        "PartialEq",
+        "Ord",
+        "PartialOrd",
+        "ToString",
+        "TS",
+    ];
+
+    bounds
+        .iter()
+        .filter_map(|b| match b {
+            TypeParamBound::Trait(t) => Some(t),
+            _ => None,
+        })
+        .map(|b| {
+            b.path
+                .segments
+                .iter()
+                .map(|s| s.ident.clone())
+                .filter(|i| !ignored_traits.iter().any(|it| i == it))
+                .collect::<Vec<_>>()
+        })
+        .flatten()
+        .collect::<Vec<_>>()
 }
