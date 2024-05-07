@@ -1,6 +1,6 @@
 [package]
 name = "ts-gen"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.75.0"
 authors = ["Vlayd Detect"]
@@ -34,7 +34,7 @@ import-esm = []
 generate-metadata = []
 
 [dependencies]
-ts-gen-macros = { version = "=0.1.0", path = "../macros" }
+ts-gen-macros = { version = "=1.0.0", path = "../macros" }
 thiserror = "1"
 chrono = { version = "0.4", optional = true }
 bigdecimal = { version = ">= 0.0.13, < 0.5", features = [
