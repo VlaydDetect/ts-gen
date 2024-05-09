@@ -34,9 +34,9 @@ pub fn absolute<T: AsRef<Path>>(path: T) -> Result<PathBuf> {
 }
 
 fn env_export_dir() -> Cow<'static, Path> {
-    match option_env!("TS_GEN_EXPORT_DIR") {
-        None => Cow::Borrowed(Path::new("./bindings")),
-        Some(dir) => Cow::Owned(PathBuf::from(dir)),
+    match std::env::var("TS_GEN_EXPORT_DIR") {
+        Err(..) => Cow::Borrowed(Path::new("./bindings")),
+        Ok(dir) => Cow::Owned(PathBuf::from(dir)),
     }
 }
 
